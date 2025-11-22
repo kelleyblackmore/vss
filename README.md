@@ -184,7 +184,13 @@ VSS automatically detects and scans various package formats:
 }
 ```
 
-## Examples
+## More Examples
+
+For more comprehensive examples, see the [examples](./examples/) directory:
+- [NPM Package Scanning](./examples/npm-scan.yml)
+- [Python Package Scanning](./examples/python-scan.yml)
+- [Multi-Language Scanning](./examples/multi-language-scan.yml)
+- [SARIF Upload for GitHub Security](./examples/sarif-upload.yml)
 
 ### Scanning Multiple Targets
 
@@ -244,14 +250,22 @@ VSS uses [OSV-Scanner](https://github.com/google/osv-scanner) by Google, which q
 - RustSec Advisory Database
 - And many more...
 
+## Troubleshooting
+
+Having issues? Check out the [Troubleshooting Guide](./TROUBLESHOOTING.md) for common problems and solutions.
+
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](./LICENSE) file for details.
 
 ## Support
 
-For issues, questions, or contributions, please visit: https://github.com/kelleyblackmore/vss
+- 📖 [Documentation](./README.md)
+- 🐛 [Report Issues](https://github.com/kelleyblackmore/vss/issues)
+- 💡 [Request Features](https://github.com/kelleyblackmore/vss/issues/new)
+- 🔧 [Troubleshooting](./TROUBLESHOOTING.md)
+- 🤝 [Contributing](./CONTRIBUTING.md)

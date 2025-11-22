@@ -1,0 +1,50 @@
+name: Security Scan with SARIF Upload
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # Required for SARIF upload
+      contents: read
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run vulnerability scan (SARIF format)
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: 'package-lock.json'
+          output-file: 'results.sarif'
+          format: 'sarif'
+        continue-on-error: true
+      
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'results.sarif'
+          category: 'vss-scan'
+      
+      - name: Create JSON report for artifact
+        if: always()
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: 'package-lock.json'
+          output-file: 'vulnerability-report.json'
+          format: 'json'
+        continue-on-error: true
+      
+      - name: Upload detailed report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vulnerability-reports
+          path: |
+            results.sarif
+            vulnerability-report.json
