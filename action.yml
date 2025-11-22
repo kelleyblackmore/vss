@@ -112,17 +112,14 @@ runs:
         # Determine scan method based on target type
         SCAN_ARGS=""
         if [ -f "$TARGET" ]; then
-          # Check if it's a lockfile
+          # Check if it's a known lockfile or manifest format
           case "$TARGET" in
-            *package-lock.json|*yarn.lock|*pnpm-lock.yaml|*requirements.txt|*Pipfile.lock|*poetry.lock|*Gemfile.lock|*go.sum|*Cargo.lock|*composer.lock|*uv.lock)
-              SCAN_ARGS="--lockfile $TARGET"
-              ;;
-            *.json|*.toml)
-              # Could be a manifest, try as lockfile first
+            *package-lock.json|*yarn.lock|*pnpm-lock.yaml|*requirements.txt|*Pipfile.lock|*poetry.lock|*Gemfile.lock|*go.sum|*Cargo.lock|*composer.lock|*uv.lock|*go.mod|*pyproject.toml)
               SCAN_ARGS="--lockfile $TARGET"
               ;;
             *)
-              # For other files, scan the directory containing them
+              # For other files (RPM, DEB, etc.), scan the directory containing them
+              # OSV-Scanner will detect package files in the directory
               SCAN_ARGS="$(dirname "$TARGET")"
               ;;
           esac
@@ -192,8 +189,9 @@ runs:
           TARGET_TYPE="directory"
         fi
         
-        # Get file size
+        # Get file size (portable across macOS and Linux)
         if [ -f "$TARGET" ]; then
+          # Try macOS format first (stat -f), then Linux format (stat -c)
           FILE_SIZE=$(stat -f%z "$TARGET" 2>/dev/null || stat -c%s "$TARGET" 2>/dev/null || echo "0")
         else
           FILE_SIZE="N/A"

@@ -15,24 +15,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # Example 1: Scan a Node.js package
-      - name: Create sample package.json
+      # Example 1: Scan a Node.js package lockfile
+      - name: Create sample package-lock.json
         run: |
-          cat > package.json << 'EOF'
+          cat > package-lock.json << 'EOF'
           {
             "name": "test-project",
             "version": "1.0.0",
-            "dependencies": {
-              "express": "4.17.1"
+            "lockfileVersion": 2,
+            "requires": true,
+            "packages": {
+              "": {
+                "name": "test-project",
+                "version": "1.0.0",
+                "dependencies": {
+                  "express": "4.17.1"
+                }
+              },
+              "node_modules/express": {
+                "version": "4.17.1",
+                "resolved": "https://registry.npmjs.org/express/-/express-4.17.1.tgz"
+              }
             }
           }
           EOF
       
-      - name: Scan Node.js package
+      - name: Scan Node.js package lockfile
         id: npm-scan
         uses: ./
         with:
-          target: 'package.json'
+          target: 'package-lock.json'
           output-file: 'npm-scan-report.json'
           format: 'json'
       
@@ -71,7 +83,7 @@ jobs:
       - name: Scan with table format
         uses: ./
         with:
-          target: 'package.json'
+          target: 'package-lock.json'
           format: 'table'
         continue-on-error: true
       

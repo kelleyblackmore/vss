@@ -26,10 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Scan package.json for vulnerabilities
+      - name: Scan package-lock.json for vulnerabilities
         uses: kelleyblackmore/vss@v1
         with:
-          target: 'package.json'
+          target: 'package-lock.json'
           output-file: 'vulnerability-report.json'
 ```
 
@@ -111,7 +111,7 @@ jobs:
         id: vss
         uses: kelleyblackmore/vss@v1
         with:
-          target: 'package.json'
+          target: 'package-lock.json'
           output-file: 'vss-report.json'
           format: 'json'
       
@@ -148,15 +148,15 @@ jobs:
 
 ## Supported Package Types
 
-VSS automatically detects and scans various package formats:
+VSS automatically detects and scans various package formats. **Note**: For best results, use lockfiles (not manifest files like package.json):
 
-- **JavaScript/Node.js**: `package.json`, `package-lock.json`, `yarn.lock`
-- **Python**: `requirements.txt`, `Pipfile.lock`, `pyproject.toml`, `uv.lock`, `*.whl`
+- **JavaScript/Node.js**: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` (recommended over `package.json`)
+- **Python**: `requirements.txt`, `Pipfile.lock`, `poetry.lock`, `uv.lock`, `pyproject.toml`
 - **Ruby**: `Gemfile.lock`
 - **Go**: `go.mod`, `go.sum`
-- **System Packages**: `*.rpm`, `*.deb`
-- **Archives**: `*.tar.gz`
-- **Directories**: Recursive scanning of project directories
+- **Rust**: `Cargo.lock`
+- **PHP**: `composer.lock`
+- **Directories**: Scans all supported package files in a directory
 
 ## Output Format
 
@@ -167,8 +167,8 @@ VSS automatically detects and scans various package formats:
   "vss_version": "1.0.0",
   "scan_metadata": {
     "timestamp": "2025-11-22T09:45:00Z",
-    "target": "package.json",
-    "target_type": "npm",
+    "target": "package-lock.json",
+    "target_type": "npm-lock",
     "checksum": "abc123...",
     "file_size": "1234",
     "scanner": "osv-scanner",
