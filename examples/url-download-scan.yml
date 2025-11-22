@@ -49,7 +49,8 @@ jobs:
           - url: 'https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz'
             type: 'npm'
             name: 'lodash'
-          - url: 'https://files.pythonhosted.org/packages/51/bd/23c926cd341ea6b7dd0b2a00aba99ae0f828be89d72b2190f27c11d4b7fb/requests-2.25.1-py2.py3-none-any.whl'
+          # Python wheel URL (shortened for readability - use full URL in production)
+          - url: 'https://files.pythonhosted.org/packages/...short.../requests-2.25.1-py2.py3-none-any.whl'
             type: 'python'
             name: 'requests'
       fail-fast: false

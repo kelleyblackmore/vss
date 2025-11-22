@@ -103,7 +103,7 @@ Common issues and solutions for the Vulnerability Scan Service.
 - name: Run scan
   uses: kelleyblackmore/vss@v1
   with:
-    target: 'package.json'
+    target: 'package-lock.json'
     output-file: './reports/scan.json'  # Ensure directory exists
   continue-on-error: true
 

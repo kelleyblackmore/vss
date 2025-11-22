@@ -271,7 +271,7 @@ For more comprehensive examples, see the [examples](./examples/) directory:
 strategy:
   matrix:
     target:
-      - package.json
+      - package-lock.json
       - requirements.txt
       - go.mod
 

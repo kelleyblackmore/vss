@@ -90,8 +90,8 @@ runs:
           mkdir -p /tmp/vss-downloads
           
           # Determine filename from URL or use generic name
-          FILENAME=$(basename "$URL")
-          if [ -z "$FILENAME" ] || [ "$FILENAME" = "URL" ]; then
+          FILENAME=$(basename "$URL" | cut -d'?' -f1)
+          if [ -z "$FILENAME" ] || [ "$FILENAME" = "/" ] || [ "$FILENAME" = "." ]; then
             FILENAME="downloaded-package"
           fi
           
@@ -287,7 +287,6 @@ EOF
         # Display table format if requested
         if [ "$FORMAT" = "table" ] && [ "$VULN_COUNT" -gt 0 ]; then
           echo "=== Vulnerability Details ==="
-          OSV_CMD="${OSV_PATH:-osv-scanner}"
           $OSV_CMD scan $SCAN_ARGS --format table --no-ignore 2>&1 || true
           echo ""
         fi
