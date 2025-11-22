@@ -1,0 +1,79 @@
+name: Test VSS Action
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-action:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Create test package.json
+        run: |
+          cat > test-package.json << 'EOF'
+          {
+            "name": "test-app",
+            "version": "1.0.0",
+            "dependencies": {
+              "lodash": "4.17.20"
+            }
+          }
+          EOF
+      
+      - name: Test basic scan
+        id: test1
+        uses: ./
+        with:
+          target: 'test-package.json'
+          output-file: 'test-report.json'
+      
+      - name: Verify outputs
+        run: |
+          echo "Testing outputs..."
+          echo "Report file: ${{ steps.test1.outputs.report-file }}"
+          echo "Vulnerabilities: ${{ steps.test1.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.test1.outputs.checksum }}"
+          
+          # Verify report file exists
+          if [ ! -f "${{ steps.test1.outputs.report-file }}" ]; then
+            echo "Error: Report file not found"
+            exit 1
+          fi
+          
+          # Verify report has valid JSON structure
+          if ! jq empty "${{ steps.test1.outputs.report-file }}" 2>/dev/null; then
+            echo "Error: Report file is not valid JSON"
+            exit 1
+          fi
+          
+          # Verify checksum is not empty
+          if [ -z "${{ steps.test1.outputs.checksum }}" ]; then
+            echo "Error: Checksum is empty"
+            exit 1
+          fi
+          
+          echo "All tests passed!"
+      
+      - name: Display report summary
+        if: always()
+        run: |
+          if [ -f test-report.json ]; then
+            echo "=== VSS Report Summary ==="
+            jq '.' test-report.json
+          fi
+      
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: test-report.json

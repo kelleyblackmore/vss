@@ -1,0 +1,86 @@
+name: VSS Example Workflow
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  vulnerability-scan:
+    runs-on: ubuntu-latest
+    name: Vulnerability Scan Examples
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Example 1: Scan a Node.js package
+      - name: Create sample package.json
+        run: |
+          cat > package.json << 'EOF'
+          {
+            "name": "test-project",
+            "version": "1.0.0",
+            "dependencies": {
+              "express": "4.17.1"
+            }
+          }
+          EOF
+      
+      - name: Scan Node.js package
+        id: npm-scan
+        uses: ./
+        with:
+          target: 'package.json'
+          output-file: 'npm-scan-report.json'
+          format: 'json'
+      
+      - name: Display npm scan results
+        run: |
+          echo "Vulnerabilities: ${{ steps.npm-scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.npm-scan.outputs.checksum }}"
+          cat npm-scan-report.json | jq '.summary'
+      
+      # Example 2: Scan Python requirements
+      - name: Create sample requirements.txt
+        run: |
+          cat > requirements.txt << 'EOF'
+          requests==2.25.1
+          django==3.1.0
+          EOF
+      
+      - name: Scan Python requirements
+        id: python-scan
+        uses: ./
+        with:
+          target: 'requirements.txt'
+          output-file: 'python-scan-report.json'
+          format: 'json'
+        continue-on-error: true
+      
+      - name: Display Python scan results
+        run: |
+          echo "Vulnerabilities: ${{ steps.python-scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.python-scan.outputs.checksum }}"
+          if [ -f python-scan-report.json ]; then
+            cat python-scan-report.json | jq '.summary'
+          fi
+      
+      # Example 3: Scan with table output
+      - name: Scan with table format
+        uses: ./
+        with:
+          target: 'package.json'
+          format: 'table'
+        continue-on-error: true
+      
+      # Upload all reports as artifacts
+      - name: Upload scan reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vss-scan-reports
+          path: |
+            *-scan-report.json
+            vss-report.json

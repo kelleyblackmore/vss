@@ -1,0 +1,23 @@
+# VSS Reports
+*-report.json
+vss-report.json
+
+# Temporary files
+*.tmp
+*.log
+/tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+test-*.json
+*-report.json
