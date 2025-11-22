@@ -1,0 +1,114 @@
+name: Manual Vulnerability Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Path to file/directory to scan (leave empty if using URL)'
+        required: false
+        type: string
+      url:
+        description: 'URL to download package from (e.g., https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz)'
+        required: false
+        type: string
+      package-type:
+        description: 'Package type'
+        required: false
+        type: choice
+        default: 'auto'
+        options:
+          - auto
+          - npm
+          - python
+          - ruby
+          - go
+          - rust
+          - rpm
+          - deb
+      format:
+        description: 'Output format'
+        required: false
+        type: choice
+        default: 'json'
+        options:
+          - json
+          - sarif
+          - table
+      fail-on-vuln:
+        description: 'Fail if vulnerabilities found?'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  manual-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        if: ${{ inputs.target != '' }}
+      
+      - name: Validate Inputs
+        run: |
+          if [ -z "${{ inputs.target }}" ] && [ -z "${{ inputs.url }}" ]; then
+            echo "Error: Either 'target' or 'url' must be provided"
+            exit 1
+          fi
+          
+          echo "=== Scan Configuration ==="
+          echo "Target: ${{ inputs.target }}"
+          echo "URL: ${{ inputs.url }}"
+          echo "Package Type: ${{ inputs.package-type }}"
+          echo "Format: ${{ inputs.format }}"
+          echo "Fail on Vulnerabilities: ${{ inputs.fail-on-vuln }}"
+      
+      - name: Run VSS Scan
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: ${{ inputs.target }}
+          url: ${{ inputs.url }}
+          package-type: ${{ inputs.package-type }}
+          output-file: 'manual-scan-report.${{ inputs.format }}'
+          format: ${{ inputs.format }}
+          fail-on-vuln: ${{ inputs.fail-on-vuln }}
+      
+      - name: Display Results
+        if: always()
+        run: |
+          echo "=== Scan Complete ==="
+          echo "Vulnerabilities Found: ${{ steps.scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.scan.outputs.checksum }}"
+          echo "Report: ${{ steps.scan.outputs.report-file }}"
+          
+          if [ "${{ inputs.format }}" = "json" ]; then
+            echo ""
+            echo "=== Full Report ==="
+            cat "${{ steps.scan.outputs.report-file }}" | jq '.'
+          fi
+      
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: manual-scan-report-${{ github.run_number }}
+          path: manual-scan-report.*
+          if-no-files-found: warn
+      
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Vulnerability Scan Results 🛡️" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Vulnerabilities Found:** ${{ steps.scan.outputs.vulnerabilities-found }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Checksum:** \`${{ steps.scan.outputs.checksum }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package Type:** ${{ inputs.package-type }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.scan.outputs.vulnerabilities-found }}" -gt 0 ]; then
+            echo "- **Status:** ⚠️ Vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** ✅ No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,59 @@
+name: Call VSS Reusable Workflow
+
+# This example shows how to call the VSS reusable workflow from another repository
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Example 1: Scan a file from your repository
+  scan-local-file:
+    uses: kelleyblackmore/vss/.github/workflows/reusable-scan.yml@v1
+    with:
+      target: 'package-lock.json'
+      package-type: 'npm'
+      format: 'json'
+      fail-on-vuln: false
+      upload-artifact: true
+      artifact-name: 'npm-scan-report'
+  
+  # Example 2: Scan a package from URL
+  scan-from-url:
+    uses: kelleyblackmore/vss/.github/workflows/reusable-scan.yml@v1
+    with:
+      url: 'https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz'
+      package-type: 'npm'
+      format: 'json'
+      upload-artifact: true
+      artifact-name: 'lodash-scan-report'
+  
+  # Example 3: Scan Python requirements
+  scan-python:
+    uses: kelleyblackmore/vss/.github/workflows/reusable-scan.yml@v1
+    with:
+      target: 'requirements.txt'
+      package-type: 'python'
+      format: 'json'
+      fail-on-vuln: true
+      upload-artifact: true
+  
+  # Example 4: Use outputs from the reusable workflow
+  process-results:
+    needs: scan-local-file
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check scan results
+        run: |
+          echo "Vulnerabilities found: ${{ needs.scan-local-file.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ needs.scan-local-file.outputs.checksum }}"
+          
+          if [ "${{ needs.scan-local-file.outputs.vulnerabilities-found }}" -gt "0" ]; then
+            echo "⚠️ Vulnerabilities detected!"
+          else
+            echo "✅ No vulnerabilities found"
+          fi

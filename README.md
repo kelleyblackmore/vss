@@ -2,6 +2,8 @@
 
 A self-service GitHub Action for vulnerability scanning of open source binaries and packages. VSS can scan various package types including npm, Python (pip, uv), RPM, DEB, and more, providing detailed vulnerability reports with checksum verification.
 
+**[🚀 Quick Start](./QUICK_START.md)** | **[📚 Examples](./examples/)** | **[🎯 Advanced Usage](./ADVANCED_USAGE.md)** | **[🔧 Troubleshooting](./TROUBLESHOOTING.md)**
+
 ## Features
 
 - 🔍 **Multi-format Support**: Scans npm packages, Python packages (including uv.lock), RPM, DEB, tarballs, and more
@@ -64,6 +66,28 @@ jobs:
     output-file: 'rpm-scan-report.json'
 ```
 
+### Scan Package from URL
+
+```yaml
+- name: Scan package from URL
+  uses: kelleyblackmore/vss@v1
+  with:
+    url: 'https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz'
+    package-type: 'npm'
+    output-file: 'url-scan-report.json'
+```
+
+### Explicit Package Type
+
+```yaml
+- name: Scan with explicit package type
+  uses: kelleyblackmore/vss@v1
+  with:
+    target: 'my-package.tar.gz'
+    package-type: 'python'
+    output-file: 'scan-report.json'
+```
+
 ### Fail on Vulnerabilities
 
 ```yaml
@@ -72,6 +96,49 @@ jobs:
   with:
     target: 'package-lock.json'
     fail-on-vuln: 'true'
+```
+
+### Reusable Workflow (Call from Another Repository)
+
+Create a workflow in your repository:
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  vulnerability-scan:
+    uses: kelleyblackmore/vss/.github/workflows/reusable-scan.yml@v1
+    with:
+      target: 'package-lock.json'
+      format: 'json'
+      fail-on-vuln: false
+      upload-artifact: true
+```
+
+### Manual Workflow Run with Parameters
+
+The VSS repository includes a manual scan workflow. You can also create your own:
+
+```yaml
+name: Manual Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_url:
+        description: 'Package URL to scan'
+        required: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: kelleyblackmore/vss@v1
+        with:
+          url: ${{ inputs.package_url }}
+          package-type: 'auto'
 ```
 
 ### SARIF Output for GitHub Security Tab
@@ -133,10 +200,14 @@ jobs:
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
-| `target` | Path to the binary, package, or directory to scan | Yes | - |
+| `target` | Path to the binary, package, or directory to scan | No* | - |
+| `url` | URL to download package from before scanning | No* | - |
+| `package-type` | Explicitly specify package type: `npm`, `python`, `ruby`, `go`, `rust`, `rpm`, `deb`, or `auto` | No | `auto` |
 | `output-file` | Output file path for scan results and metadata | No | `vss-report.json` |
 | `format` | Output format: `json`, `sarif`, or `table` | No | `json` |
 | `fail-on-vuln` | Fail the action if vulnerabilities are found | No | `false` |
+
+*Either `target` or `url` must be provided.
 
 ## Outputs
 
@@ -191,6 +262,8 @@ For more comprehensive examples, see the [examples](./examples/) directory:
 - [Python Package Scanning](./examples/python-scan.yml)
 - [Multi-Language Scanning](./examples/multi-language-scan.yml)
 - [SARIF Upload for GitHub Security](./examples/sarif-upload.yml)
+- [URL Download and Scan](./examples/url-download-scan.yml) - Download packages from URLs
+- [Reusable Workflow Caller](./examples/reusable-workflow-caller.yml) - Call VSS from other repos
 
 ### Scanning Multiple Targets
 

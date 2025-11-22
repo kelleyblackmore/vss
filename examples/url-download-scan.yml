@@ -1,0 +1,79 @@
+name: Scan Package from URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_url:
+        description: 'URL of package to scan'
+        required: true
+        default: 'https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz'
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly
+
+jobs:
+  scan-from-url:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Scan package from URL
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          url: ${{ inputs.package_url || 'https://registry.npmjs.org/express/-/express-4.17.1.tgz' }}
+          package-type: 'npm'
+          output-file: 'url-scan-report.json'
+      
+      - name: Display results
+        run: |
+          echo "Scanned package from: ${{ inputs.package_url }}"
+          echo "Vulnerabilities: ${{ steps.scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.scan.outputs.checksum }}"
+      
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: url-scan-report
+          path: url-scan-report.json
+
+  # Example: Scan multiple URLs
+  scan-multiple-packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - url: 'https://registry.npmjs.org/lodash/-/lodash-4.17.20.tgz'
+            type: 'npm'
+            name: 'lodash'
+          - url: 'https://files.pythonhosted.org/packages/51/bd/23c926cd341ea6b7dd0b2a00aba99ae0f828be89d72b2190f27c11d4b7fb/requests-2.25.1-py2.py3-none-any.whl'
+            type: 'python'
+            name: 'requests'
+      fail-fast: false
+    
+    name: Scan ${{ matrix.name }}
+    steps:
+      - name: Scan ${{ matrix.name }}
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          url: ${{ matrix.url }}
+          package-type: ${{ matrix.type }}
+          output-file: '${{ matrix.name }}-report.json'
+        continue-on-error: true
+      
+      - name: Results for ${{ matrix.name }}
+        run: |
+          echo "Package: ${{ matrix.name }}"
+          echo "Vulnerabilities: ${{ steps.scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.scan.outputs.checksum }}"
+      
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.name }}-scan-report
+          path: ${{ matrix.name }}-report.json
