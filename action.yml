@@ -1,0 +1,300 @@
+name: 'Vulnerability Scan Service (VSS)'
+description: 'Self-service vulnerability scanning for open source binaries (npm, Python, RPM, etc.) with checksum verification and detailed reporting'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  target:
+    description: 'Path to the binary, package, or directory to scan (e.g., package.json, requirements.txt, *.rpm, *.whl)'
+    required: false
+  url:
+    description: 'URL to download the package/binary from before scanning'
+    required: false
+  package-type:
+    description: 'Explicitly specify package type: npm, python, ruby, go, rust, rpm, deb, or auto-detect (default: auto)'
+    required: false
+    default: 'auto'
+  output-file:
+    description: 'Output file path for scan results and metadata (default: vss-report.json)'
+    required: false
+    default: 'vss-report.json'
+  format:
+    description: 'Output format: json, sarif, or table (default: json)'
+    required: false
+    default: 'json'
+  fail-on-vuln:
+    description: 'Fail the action if vulnerabilities are found (true/false)'
+    required: false
+    default: 'false'
+
+outputs:
+  report-file:
+    description: 'Path to the generated vulnerability report file'
+    value: ${{ steps.scan.outputs.report-file }}
+  vulnerabilities-found:
+    description: 'Number of vulnerabilities found'
+    value: ${{ steps.scan.outputs.vulnerabilities-found }}
+  checksum:
+    description: 'SHA256 checksum of the scanned target'
+    value: ${{ steps.scan.outputs.checksum }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install OSV-Scanner
+      shell: bash
+      run: |
+        echo "Installing OSV-Scanner..."
+        
+        # Check if Go is available (preferred method)
+        if command -v go &> /dev/null; then
+          echo "Installing via go install..."
+          go install github.com/google/osv-scanner/cmd/osv-scanner@v1.9.1
+          export PATH=$PATH:$(go env GOPATH)/bin
+          OSV_PATH=$(which osv-scanner)
+          echo "osv-path=$OSV_PATH" >> $GITHUB_ENV
+          echo "PATH=$PATH:$(go env GOPATH)/bin" >> $GITHUB_ENV
+          osv-scanner --version
+        else
+          # Fallback to binary download
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          
+          case $ARCH in
+            x86_64) ARCH="amd64" ;;
+            aarch64) ARCH="arm64" ;;
+            arm64) ARCH="arm64" ;;
+          esac
+          
+          VERSION="1.9.1"
+          DOWNLOAD_URL="https://github.com/google/osv-scanner/releases/download/v${VERSION}/osv-scanner_${VERSION}_${OS}_${ARCH}"
+          
+          echo "Downloading from: $DOWNLOAD_URL"
+          curl -L -o /tmp/osv-scanner "$DOWNLOAD_URL"
+          chmod +x /tmp/osv-scanner
+          echo "osv-path=/tmp/osv-scanner" >> $GITHUB_ENV
+          /tmp/osv-scanner --version
+        fi
+
+    - name: Download Package from URL (if provided)
+      shell: bash
+      run: |
+        URL="${{ inputs.url }}"
+        TARGET="${{ inputs.target }}"
+        
+        if [ -n "$URL" ]; then
+          echo "Downloading package from URL: $URL"
+          
+          # Create downloads directory
+          mkdir -p /tmp/vss-downloads
+          
+          # Determine filename from URL or use generic name
+          FILENAME=$(basename "$URL" | cut -d'?' -f1)
+          if [ -z "$FILENAME" ] || [ "$FILENAME" = "/" ] || [ "$FILENAME" = "." ]; then
+            FILENAME="downloaded-package"
+          fi
+          
+          DOWNLOAD_PATH="/tmp/vss-downloads/$FILENAME"
+          
+          # Download the file
+          echo "Downloading to: $DOWNLOAD_PATH"
+          curl -L -o "$DOWNLOAD_PATH" "$URL"
+          
+          # Verify download
+          if [ ! -f "$DOWNLOAD_PATH" ]; then
+            echo "Error: Download failed"
+            exit 1
+          fi
+          
+          echo "Download complete. Size: $(stat -c%s "$DOWNLOAD_PATH" 2>/dev/null || stat -f%z "$DOWNLOAD_PATH") bytes"
+          
+          # Set the target to the downloaded file
+          echo "VSS_TARGET=$DOWNLOAD_PATH" >> $GITHUB_ENV
+        elif [ -n "$TARGET" ]; then
+          echo "VSS_TARGET=$TARGET" >> $GITHUB_ENV
+        else
+          echo "Error: Either 'target' or 'url' input must be provided"
+          exit 1
+        fi
+
+    - name: Run Vulnerability Scan
+      id: scan
+      shell: bash
+      run: |
+        TARGET="${VSS_TARGET}"
+        OUTPUT_FILE="${{ inputs.output-file }}"
+        FORMAT="${{ inputs.format }}"
+        FAIL_ON_VULN="${{ inputs.fail-on-vuln }}"
+        PACKAGE_TYPE="${{ inputs.package-type }}"
+        
+        echo "=== Vulnerability Scan Service (VSS) ==="
+        echo "Target: $TARGET"
+        echo "Package Type: $PACKAGE_TYPE"
+        echo "Output: $OUTPUT_FILE"
+        echo "Format: $FORMAT"
+        echo ""
+        
+        # Check if target exists
+        if [ ! -e "$TARGET" ]; then
+          echo "Error: Target '$TARGET' does not exist"
+          exit 1
+        fi
+        
+        # Generate checksum
+        echo "Generating checksums..."
+        if [ -f "$TARGET" ]; then
+          CHECKSUM=$(sha256sum "$TARGET" | cut -d' ' -f1)
+          echo "SHA256: $CHECKSUM"
+        elif [ -d "$TARGET" ]; then
+          # For directories, create a combined checksum of all files
+          CHECKSUM=$(find "$TARGET" -type f -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1)
+          echo "SHA256 (directory): $CHECKSUM"
+        fi
+        echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+        
+        # Create metadata
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        
+        # Prepare scan command based on format
+        SCAN_OUTPUT="/tmp/osv-scan-results.json"
+        
+        # Determine scan method based on target type
+        SCAN_ARGS=""
+        if [ -f "$TARGET" ]; then
+          # Check if it's a known lockfile or manifest format
+          case "$TARGET" in
+            *package-lock.json|*yarn.lock|*pnpm-lock.yaml|*requirements.txt|*Pipfile.lock|*poetry.lock|*Gemfile.lock|*go.sum|*Cargo.lock|*composer.lock|*uv.lock|*go.mod|*pyproject.toml)
+              SCAN_ARGS="--lockfile $TARGET"
+              ;;
+            *)
+              # For other files (RPM, DEB, etc.), scan the directory containing them
+              # OSV-Scanner will detect package files in the directory
+              SCAN_ARGS="$(dirname "$TARGET")"
+              ;;
+          esac
+        elif [ -d "$TARGET" ]; then
+          SCAN_ARGS="$TARGET"
+        fi
+        
+        # Run OSV-Scanner
+        echo ""
+        echo "Running vulnerability scan..."
+        set +e  # Don't exit on error, we want to capture the results
+        
+        OSV_CMD="${OSV_PATH:-osv-scanner}"
+        if [ "$FORMAT" = "sarif" ]; then
+          $OSV_CMD scan $SCAN_ARGS --format sarif --output "$SCAN_OUTPUT" --no-ignore 2>&1
+        else
+          $OSV_CMD scan $SCAN_ARGS --format json --output "$SCAN_OUTPUT" --no-ignore 2>&1
+        fi
+        
+        SCAN_EXIT_CODE=$?
+        set -e
+        
+        # Check if scan produced output
+        if [ ! -f "$SCAN_OUTPUT" ]; then
+          echo "Warning: Scan did not produce output file, creating empty result"
+          echo '{"results": []}' > "$SCAN_OUTPUT"
+        fi
+        
+        # Count vulnerabilities
+        if [ -f "$SCAN_OUTPUT" ]; then
+          if [ "$FORMAT" = "sarif" ]; then
+            VULN_COUNT=$(jq -r '.runs[0].results | length' "$SCAN_OUTPUT" 2>/dev/null || echo "0")
+          else
+            VULN_COUNT=$(jq -r '.results | length' "$SCAN_OUTPUT" 2>/dev/null || echo "0")
+          fi
+        else
+          VULN_COUNT=0
+        fi
+        
+        echo ""
+        echo "Vulnerabilities found: $VULN_COUNT"
+        echo "vulnerabilities-found=$VULN_COUNT" >> $GITHUB_OUTPUT
+        
+        # Create comprehensive report
+        echo ""
+        echo "Generating report..."
+        
+        # Determine target type (use explicit package-type if provided)
+        TARGET_TYPE="unknown"
+        if [ "$PACKAGE_TYPE" != "auto" ]; then
+          # Use explicitly provided package type
+          TARGET_TYPE="$PACKAGE_TYPE"
+          echo "Using explicit package type: $TARGET_TYPE"
+        elif [ -f "$TARGET" ]; then
+          # Auto-detect from filename
+          case "$TARGET" in
+            *.rpm) TARGET_TYPE="rpm" ;;
+            *.deb) TARGET_TYPE="deb" ;;
+            *.whl) TARGET_TYPE="python-wheel" ;;
+            *.tar.gz) TARGET_TYPE="tarball" ;;
+            *package.json) TARGET_TYPE="npm" ;;
+            *package-lock.json) TARGET_TYPE="npm-lock" ;;
+            *requirements.txt) TARGET_TYPE="python-requirements" ;;
+            *Pipfile.lock) TARGET_TYPE="python-pipfile" ;;
+            *pyproject.toml) TARGET_TYPE="python-pyproject" ;;
+            *uv.lock) TARGET_TYPE="python-uv" ;;
+            *go.mod) TARGET_TYPE="go" ;;
+            *Gemfile.lock) TARGET_TYPE="ruby" ;;
+            *) TARGET_TYPE="file" ;;
+          esac
+        elif [ -d "$TARGET" ]; then
+          TARGET_TYPE="directory"
+        fi
+        
+        # Get file size (portable across macOS and Linux)
+        if [ -f "$TARGET" ]; then
+          # Try macOS format first (stat -f), then Linux format (stat -c)
+          FILE_SIZE=$(stat -f%z "$TARGET" 2>/dev/null || stat -c%s "$TARGET" 2>/dev/null || echo "0")
+        else
+          FILE_SIZE="N/A"
+        fi
+        
+        # Build final report with metadata
+        cat > "$OUTPUT_FILE" << EOF
+{
+  "vss_version": "1.0.0",
+  "scan_metadata": {
+    "timestamp": "$TIMESTAMP",
+    "target": "$TARGET",
+    "target_type": "$TARGET_TYPE",
+    "checksum": "$CHECKSUM",
+    "file_size": "$FILE_SIZE",
+    "scanner": "osv-scanner",
+    "scanner_exit_code": $SCAN_EXIT_CODE
+  },
+  "summary": {
+    "vulnerabilities_found": $VULN_COUNT,
+    "scan_status": "$([ $SCAN_EXIT_CODE -eq 0 ] && echo 'clean' || echo 'vulnerabilities_detected')"
+  },
+  "scan_results": $(cat "$SCAN_OUTPUT")
+}
+EOF
+        
+        echo "report-file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+        
+        # Display summary
+        echo ""
+        echo "=== Scan Summary ==="
+        echo "Target: $TARGET ($TARGET_TYPE)"
+        echo "Checksum: $CHECKSUM"
+        echo "Vulnerabilities: $VULN_COUNT"
+        echo "Report: $OUTPUT_FILE"
+        echo ""
+        
+        # Display table format if requested
+        if [ "$FORMAT" = "table" ] && [ "$VULN_COUNT" -gt 0 ]; then
+          echo "=== Vulnerability Details ==="
+          $OSV_CMD scan $SCAN_ARGS --format table --no-ignore 2>&1 || true
+          echo ""
+        fi
+        
+        # Fail if vulnerabilities found and fail-on-vuln is true
+        if [ "$FAIL_ON_VULN" = "true" ] && [ "$VULN_COUNT" -gt 0 ]; then
+          echo "Error: Found $VULN_COUNT vulnerabilities and fail-on-vuln is enabled"
+          exit 1
+        fi
+        
+        echo "Scan completed successfully!"

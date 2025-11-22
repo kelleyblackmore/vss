@@ -1,0 +1,53 @@
+name: Python Vulnerability Scan
+
+on:
+  push:
+    paths:
+      - 'requirements.txt'
+      - 'uv.lock'
+      - 'Pipfile.lock'
+  pull_request:
+
+jobs:
+  scan-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Scan requirements.txt
+      - name: Scan requirements.txt
+        if: hashFiles('requirements.txt') != ''
+        id: scan-requirements
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: 'requirements.txt'
+          output-file: 'python-requirements-report.json'
+        continue-on-error: true
+      
+      # Scan uv.lock if present
+      - name: Scan uv.lock
+        if: hashFiles('uv.lock') != ''
+        id: scan-uv
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: 'uv.lock'
+          output-file: 'python-uv-report.json'
+        continue-on-error: true
+      
+      - name: Summary
+        run: |
+          echo "Python vulnerability scanning complete"
+          if [ -f python-requirements-report.json ]; then
+            echo "Requirements scan: ${{ steps.scan-requirements.outputs.vulnerabilities-found }} vulnerabilities"
+          fi
+          if [ -f python-uv-report.json ]; then
+            echo "UV lock scan: ${{ steps.scan-uv.outputs.vulnerabilities-found }} vulnerabilities"
+          fi
+      
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: python-scan-reports
+          path: |
+            python-*-report.json

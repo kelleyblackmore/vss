@@ -1,0 +1,34 @@
+name: NPM Package Vulnerability Scan
+
+on:
+  push:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+
+jobs:
+  scan-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Scan package-lock.json
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: 'package-lock.json'
+          output-file: 'npm-vulnerability-report.json'
+          fail-on-vuln: 'false'
+      
+      - name: Display results
+        run: |
+          echo "Found ${{ steps.scan.outputs.vulnerabilities-found }} vulnerabilities"
+          echo "Checksum: ${{ steps.scan.outputs.checksum }}"
+      
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-scan-report
+          path: npm-vulnerability-report.json

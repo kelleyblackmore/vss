@@ -1,0 +1,67 @@
+name: Multi-Language Vulnerability Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+
+jobs:
+  scan-all:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: 'package-lock.json'
+            name: 'npm'
+            output: 'npm-report.json'
+          - target: 'requirements.txt'
+            name: 'python'
+            output: 'python-report.json'
+          - target: 'go.sum'
+            name: 'go'
+            output: 'go-report.json'
+          - target: 'Gemfile.lock'
+            name: 'ruby'
+            output: 'ruby-report.json'
+      fail-fast: false
+    
+    name: Scan ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check if target exists
+        id: check
+        run: |
+          if [ -f "${{ matrix.target }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Scan ${{ matrix.name }} dependencies
+        if: steps.check.outputs.exists == 'true'
+        id: scan
+        uses: kelleyblackmore/vss@v1
+        with:
+          target: ${{ matrix.target }}
+          output-file: ${{ matrix.output }}
+        continue-on-error: true
+      
+      - name: Display results
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "=== ${{ matrix.name }} Scan Results ==="
+          echo "Vulnerabilities: ${{ steps.scan.outputs.vulnerabilities-found }}"
+          echo "Checksum: ${{ steps.scan.outputs.checksum }}"
+          if [ -f "${{ matrix.output }}" ]; then
+            cat "${{ matrix.output }}" | jq '.summary'
+          fi
+      
+      - name: Upload report
+        if: steps.check.outputs.exists == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-vulnerability-report
+          path: ${{ matrix.output }}
