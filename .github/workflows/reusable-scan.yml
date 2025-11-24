@@ -68,7 +68,7 @@ jobs:
       
       - name: Run VSS Scan
         id: vss
-        uses: kelleyblackmore/vss@v1
+        uses: ./
         with:
           target: ${{ inputs.target }}
           url: ${{ inputs.url }}
