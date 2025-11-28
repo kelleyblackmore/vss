@@ -254,24 +254,24 @@ runs:
         
         # Build final report with metadata
         cat > "$OUTPUT_FILE" << EOF
-{
-  "vss_version": "1.0.0",
-  "scan_metadata": {
-    "timestamp": "$TIMESTAMP",
-    "target": "$TARGET",
-    "target_type": "$TARGET_TYPE",
-    "checksum": "$CHECKSUM",
-    "file_size": "$FILE_SIZE",
-    "scanner": "osv-scanner",
-    "scanner_exit_code": $SCAN_EXIT_CODE
-  },
-  "summary": {
-    "vulnerabilities_found": $VULN_COUNT,
-    "scan_status": "$([ $SCAN_EXIT_CODE -eq 0 ] && echo 'clean' || echo 'vulnerabilities_detected')"
-  },
-  "scan_results": $(cat "$SCAN_OUTPUT")
-}
-EOF
+        {
+          "vss_version": "1.0.0",
+          "scan_metadata": {
+            "timestamp": "$TIMESTAMP",
+            "target": "$TARGET",
+            "target_type": "$TARGET_TYPE",
+            "checksum": "$CHECKSUM",
+            "file_size": "$FILE_SIZE",
+            "scanner": "osv-scanner",
+            "scanner_exit_code": $SCAN_EXIT_CODE
+          },
+          "summary": {
+            "vulnerabilities_found": $VULN_COUNT,
+            "scan_status": "$([ $SCAN_EXIT_CODE -eq 0 ] && echo 'clean' || echo 'vulnerabilities_detected')"
+          },
+          "scan_results": $(cat "$SCAN_OUTPUT")
+        }
+        EOF
         
         echo "report-file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
         
